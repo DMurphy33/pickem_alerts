@@ -92,18 +92,20 @@ def get_spreads(date):
 
 
 def main():
-    creds = authenticate_with_google()
-    service = build("gmail", "v1", credentials=creds)
     sender_email = os.environ["SENDER_EMAIL"]
     recipient_email = os.environ["RECIPIENT_EMAIL"]
 
     new_day = True
     while True:
         if new_day:
+            # Get best bet for the current date
             current_date = datetime.now(timezone("US/Eastern")).date()
-            creds = authenticate_with_google()
             spreads = get_spreads(current_date)
             best_bet = spreads.loc[spreads.price.idxmin()]
+
+            # Authenticate with google and send best bet message
+            creds = authenticate_with_google()
+            service = build("gmail", "v1", credentials=creds)
             send_email(service, sender_email, recipient_email, body=str(best_bet))
 
         new_day = current_date < datetime.now(timezone("US/Eastern")).date()
