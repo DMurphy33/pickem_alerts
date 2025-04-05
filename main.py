@@ -2,7 +2,7 @@ import base64
 import io
 import json
 import os
-from datetime import datetime, time
+from datetime import date, datetime, time
 from pytz import timezone
 from time import sleep
 
@@ -11,7 +11,7 @@ import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -22,11 +22,17 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 TOKEN_FILE = "token.json"
 
 
-def authenticate_with_google():
-    """Authenticate with credentials.json or token.json if it exists."""
+def authenticate_with_google() -> Credentials:
+    """Authenticate with credentials.json or token.json if it exists.
+
+    Returns
+    -------
+    Credentials
+        Credentials for the Google API.
+    """
     creds = None
 
-    # Check if token.json file exists (it stores user's access and refresh tokens)
+    # Check if token.json file exists
     if os.path.exists(TOKEN_FILE):
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
 
@@ -47,8 +53,23 @@ def authenticate_with_google():
     return creds
 
 
-def create_email_message(sender, to, body):
-    """Create an email message in MIME format."""
+def create_email_message(sender: str, to: str, body: str) -> dict:
+    """Create an email message in MIME format.
+
+    Parameters
+    ----------
+    sender: str
+        The email address of the message sender.
+    to: str
+        The email address of the message recipient.
+    body: str
+        The message content.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the message in utf-8
+    """
     message = MIMEMultipart()
     message["to"] = to
     message["from"] = sender
@@ -58,8 +79,20 @@ def create_email_message(sender, to, body):
     return {"raw": raw_message}
 
 
-def send_email(service, sender, to, body):
-    """Send an email using Gmail API."""
+def send_email(service: Resource, sender: str, to: str, body: str) -> None:
+    """Send an email using Gmail API.
+
+    Parameters
+    ----------
+    service: Resource
+        Resource authenticated with Google's API to send messages.
+    sender: str
+        The sender of the message.
+    to: str
+        The recipient of the message.
+    body: str
+        The content of the message.
+    """
     try:
         message = create_email_message(sender, to, body)
         service.users().messages().send(userId="me", body=message).execute()
@@ -67,11 +100,26 @@ def send_email(service, sender, to, body):
         print(f"An error occurred: {error}")
 
 
-def get_spreads(date):
-    key = os.environ["ODDS_API_KEY"]
+def get_spreads(current_date: date, key=str) -> pd.DataFrame:
+    """Get the spreads for all MLB games for a particular date.
+
+    Parameters
+    ----------
+    current_date: date
+        The date to get the MLB spreads for.
+    key: str
+        Key to use for the request to The Odds API.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the name of each MLB team who plays on `current_date` along with their moneyline odds and
+        spread.
+    """
+
     date_format = "%Y-%m-%dT%H:%M:%SZ"
-    start = datetime.combine(date, time(0, 0, 0)).astimezone(timezone("UTC")).strftime(date_format)
-    end = datetime.combine(date, time(23, 59, 59)).astimezone(timezone("UTC")).strftime(date_format)
+    start = datetime.combine(current_date, time(0, 0, 0)).astimezone(timezone("UTC")).strftime(date_format)
+    end = datetime.combine(current_date, time(23, 59, 59)).astimezone(timezone("UTC")).strftime(date_format)
 
     params = {
         "api_key": key,
@@ -91,16 +139,18 @@ def get_spreads(date):
     return spreads
 
 
-def main():
+def main() -> None:
+    """Send the best MLB odds as an email every day."""
     sender_email = os.environ["SENDER_EMAIL"]
     recipient_email = os.environ["RECIPIENT_EMAIL"]
+    key = os.environ["ODDS_API_KEY"]
 
     new_day = True
     while True:
         if new_day:
             # Get best bet for the current date
             current_date = datetime.now(timezone("US/Eastern")).date()
-            spreads = get_spreads(current_date)
+            spreads = get_spreads(current_date, key)
             best_bet = spreads.loc[spreads.price.idxmin()]
 
             # Authenticate with google and send best bet message
