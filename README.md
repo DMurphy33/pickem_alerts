@@ -1,6 +1,6 @@
 # Pick'em Alerts
 
-This project is to help decide which team select for the daily pick'em in MLB 9 Innings. It will query the [Odds API](https://the-odds-api.com/) for all the upcoming games for the day and text you who has the best odds to win.
+This project is to help decide which team to select for the daily pick'em in MLB 9 Innings. It will query the [Odds API](https://the-odds-api.com/) for all the upcoming games for the day and text you who has the best odds to win.
 
 ## Installation
 
