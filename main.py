@@ -92,6 +92,7 @@ def get_spreads(date):
 
 
 def main():
+    creds = authenticate_with_google()
     service = build("gmail", "v1", credentials=creds)
     sender_email = os.environ["SENDER_EMAIL"]
     recipient_email = os.environ["RECIPIENT_EMAIL"]
