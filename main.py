@@ -2,25 +2,28 @@ import base64
 import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, time
 from pytz import timezone
 from time import sleep
 
 import pandas as pd
 import requests
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
-# Define the required scope
-SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
-# Path to store token (if you're saving it locally)
-TOKEN_FILE = 'token.json'
+TOKEN_FILE = "token.json"
 
-def authenticate_with_client_id_and_secret():
-    """Authenticate using client ID and client secret from environment variables."""
+
+def authenticate_with_google():
+    """Authenticate with credentials.json or token.json if it exists."""
     creds = None
 
     # Check if token.json file exists (it stores user's access and refresh tokens)
@@ -31,48 +34,78 @@ def authenticate_with_client_id_and_secret():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Create the OAuth flow using the client ID and secret from the environment variables
-            flow = InstalledAppFlow.from_client_info(
-                client_info={
-                    'installed': {
-                        'client_id': os.environ["GOOGLE_CLIENT_ID"],
-                        'client_secret': os.environ["GOOGLE_CLIENT_SECRET"],
-                        'redirect_uris': ['http://localhost'],
-                        'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                        'token_uri': 'https://oauth2.googleapis.com/token',
-                    }
-                },
-                scopes=SCOPES
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "client_secrets.json",
+                scopes=SCOPES,
             )
             creds = flow.run_local_server(port=0)  # Open a browser for authentication
 
         # Save the credentials for the next run
-        with open(TOKEN_FILE, 'w') as token:
+        with open(TOKEN_FILE, "w") as token:
             token.write(creds.to_json())
 
     return creds
 
 
-def main():
+def create_email_message(sender, to, body):
+    """Create an email message in MIME format."""
+    message = MIMEMultipart()
+    message["to"] = to
+    message["from"] = sender
+    msg = MIMEText(body)
+    message.attach(msg)
+    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    return {"raw": raw_message}
+
+
+def send_email(service, sender, to, body):
+    """Send an email using Gmail API."""
+    try:
+        message = create_email_message(sender, to, body)
+        service.users().messages().send(userId="me", body=message).execute()
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+
+
+def get_spreads(date):
     key = os.environ["ODDS_API_KEY"]
-    current_date = datetime.now(timezone('US/Eastern')).date()
+    date_format = "%Y-%m-%dT%H:%M:%SZ"
+    start = datetime.combine(date, time(0, 0, 0)).astimezone(timezone("UTC")).strftime(date_format)
+    end = datetime.combine(date, time(23, 59, 59)).astimezone(timezone("UTC")).strftime(date_format)
+
+    params = {
+        "api_key": key,
+        "regions": "us",
+        "markets": "h2h,spreads",
+        "oddsFormat": "american",
+        "bookmakers": "fanduel",
+        "commenceTimeFrom": start,
+        "commenceTimeTo": end,
+    }
+    url = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/"
+    res = requests.get(url, params=params)
+    odds = json.load(io.BytesIO(res.content))
+    spreads = pd.DataFrame.from_records(
+        [team for game in odds for team in game["bookmakers"][0]["markets"][0]["outcomes"]]
+    )
+    return spreads
+
+
+def main():
+    service = build("gmail", "v1", credentials=creds)
+    sender_email = os.environ["SENDER_EMAIL"]
+    recipient_email = os.environ["RECIPIENT_EMAIL"]
+
     new_day = True
     while True:
         if new_day:
-            params = {
-                'api_key': key,
-                'regions': 'us',
-                'markets': 'h2h,spreads',
-                'oddsFormat': 'american',
-                'bookmakers': 'fanduel',
-            }
-            url = 'https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/'
-            res = requests.get(url, params=params)
-            odds = json.load(io.BytesIO(res.content))
-            spreads = pd.DataFrame.from_records([team for game in odds for team in game['bookmakers'][0]['markets'][0]['outcomes']])
-            print(spreads.loc[spreads.point.idxmin()])
-        
-        new_day = current_date < datetime.now(timezone('US/Eastern')).date()
+            current_date = datetime.now(timezone("US/Eastern")).date()
+            creds = authenticate_with_google()
+            spreads = get_spreads(current_date)
+            best_bet = spreads.loc[spreads.price.idxmin()]
+            send_email(service, sender_email, recipient_email, body=str(best_bet))
+
+        new_day = current_date < datetime.now(timezone("US/Eastern")).date()
         sleep(60)
 
 
