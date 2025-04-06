@@ -4,6 +4,8 @@ This project is to help decide which team to select for the daily pick'em in MLB
 
 ## Installation
 
+### Local
+
 ```bash
 pip install uv
 git clone git@github.com:DMurphy33/pickem_alerts.git
@@ -24,8 +26,19 @@ For the `RECIPIENT_EMAIL` you can use a phone number instead by formatting it as
 
 You will also need to have a file in the root directory of this repository called `client_secrets.json` that contains your [Google API](https://console.cloud.google.com/apis/credentials) client ID and client secret.
 
+
+### Local
+
 To run the script, simply run this command from the root directory of this repository.
 
 ```bash
 uv run main.py
+```
+
+### Docker
+
+```bash
+git clone git@github.com:DMurphy33/pickem_alerts.git
+cd pickem_alerts
+docker compose up
 ```
