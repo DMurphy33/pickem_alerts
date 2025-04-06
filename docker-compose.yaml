@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    environment:
+      ODDS_API_KEY: ${ODDS_API_KEY}
+      SENDER_EMAIL: ${SENDER_EMAIL}
+      RECIPIENT_EMAIL: ${RECIPIENT_EMAIL}
+    restart: always
