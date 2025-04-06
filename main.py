@@ -118,13 +118,13 @@ def get_spreads(current_date: date, key=str) -> pd.DataFrame:
     """
 
     date_format = "%Y-%m-%dT%H:%M:%SZ"
-    start = datetime.combine(current_date, time(0, 0, 0)).astimezone(timezone("UTC")).strftime(date_format)
+    start = datetime.combine(current_date, time(10, 0, 0)).astimezone(timezone("UTC")).strftime(date_format)
     end = datetime.combine(current_date, time(23, 59, 59)).astimezone(timezone("UTC")).strftime(date_format)
 
     params = {
         "api_key": key,
         "regions": "us",
-        "markets": "h2h,spreads",
+        "markets": "h2h",
         "oddsFormat": "american",
         "bookmakers": "fanduel",
         "commenceTimeFrom": start,
