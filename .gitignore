@@ -3,3 +3,7 @@ token.json
 client_secrets.json
 
 .envrc
+
+__pycache__
+
+log.txt
